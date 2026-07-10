@@ -1,92 +1,39 @@
 import 'dotenv/config';
-import express from 'express';
-import { roll } from '@airjp73/dice-notation'
-import {
-  ButtonStyleTypes,
-  InteractionResponseFlags,
-  InteractionResponseType,
-  InteractionType,
-  MessageComponentTypes,
-  verifyKeyMiddleware,
-} from 'discord-interactions';
 
-// Create an express app
-const app = express();
-// Get port, or default to 3000
-const PORT = process.env.PORT || 3000;
+import {Client, Events, GatewayIntentBits} from 'discord.js';
+import {User} from "discord.js";
 
-/**
- * Interactions endpoint URL where Discord will send HTTP requests
- * Parse request body and verifies incoming requests using discord-interactions package
- */
-app.post('/interactions', verifyKeyMiddleware(process.env.PUBLIC_KEY), async function (req, res) {
-  // Interaction id, type and data
-  const { id, type, data } = req.body;
-
-  /**
-   * Handle verification requests
-   */
-  if (type === InteractionType.PING) {
-    return res.send({ type: InteractionResponseType.PONG });
-  }
-
-  /**
-   * Handle slash command requests
-   * See https://discord.com/developers/docs/interactions/application-commands#slash-commands
-   */
-  if (type === InteractionType.APPLICATION_COMMAND) {
-    const { name } = data;
-
-    // "test" command
-    if (name === 'test') {
-      // Send a message into the channel where command was triggered from
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-          components: [
-            {
-              type: MessageComponentTypes.TEXT_DISPLAY,
-              // Fetches a random emoji to send from a helper function
-              content: `hello world ${getRandomEmoji()}`
-            }
-          ]
-        },
-      });
-    }
-
-    if (name === 'roll' && id) {
-      // Interaction context
-      const context = req.body.context;
-      // User ID is in user field for (G)DMs, and member for servers
-      const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
-      // User's object choice
-      const dice = req.body.data.options[0].value;
-
-      const { result } = roll(dice);
-
-      return res.send({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: {
-          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-          components: [
-            {
-              type: MessageComponentTypes.TEXT_DISPLAY,
-              content: `Le résultat de ton dé est: ${result}`
-            }
-          ]
-        },
-      });
-    }
-
-    console.error(`unknown command: ${name}`);
-    return res.status(400).json({ error: 'unknown command' });
-  }
-
-  console.error('unknown interaction type', type);
-  return res.status(400).json({ error: 'unknown interaction type' });
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
+    ]
 });
 
-app.listen(PORT, () => {
-  console.log('Listening on port', PORT);
+
+/* Définition des listeners */
+client.once(Events.ClientReady, (readyClient) => {
+    console.log(`Ready! Logged in as ${readyClient.user.tag}`);
+    readyClient.user.setActivity('Destructeur de scammeur')
 });
+
+client.on(Events.MessageCreate, (message) => {
+    // Guard cause for DM
+    if(!message.inGuild()) return;
+
+    // Guard cause for the honeypot channel
+    if (message.channelId !== process.env.HONEY_POT_ID) return;
+
+
+    let scammerMember = message.member;
+    // Guard cause for the bot itself or for user with the immunity role
+    if(message.author.id === client.user.id || scammerMember.roles.cache.has(process.env.IMMUNITY_ROLE))return;
+    message.delete();
+    scammerMember.kick("Talked in HoneyPot").then(r => "Kicked member")
+});
+
+client.login(process.env.TOKEN);
+
+
