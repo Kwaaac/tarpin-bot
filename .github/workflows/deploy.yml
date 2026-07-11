@@ -51,5 +51,5 @@ jobs:
           port: ${{ secrets.SERVER_PORT }}
           script: |
             cd /home/tarpin/tarpin
-            docker-compose pull
-            docker-compose up -d
+            docker compose pull
+            docker compose up -d
